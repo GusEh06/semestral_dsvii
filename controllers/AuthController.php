@@ -1,5 +1,5 @@
 <?php
-
+require_once __DIR__ . '/../models/Usuario.php';
 // =====================================================
 // controllers/AuthController.php - Controlador de Autenticación
 // =====================================================
@@ -101,9 +101,14 @@ class AuthController
             return false;
         }
 
+        // Si es Super_Admin, acceso total
+        if ($_SESSION['rol_nombre'] === 'Super_Admin') {
+            return true;
+        }
+
         $permisos = $_SESSION['permisos'] ?? [];
         foreach ($permisos as $p) {
-            if ($p['nombre'] === $permiso) {
+            if (strcasecmp(trim($p['nombre']), trim($permiso)) === 0) {
                 return true;
             }
         }
