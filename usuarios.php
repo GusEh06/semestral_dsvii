@@ -1,10 +1,11 @@
 <?php
-require_once 'controllers/ColaboradoresController.php';
+require_once 'controllers/UsuariosController.php';
 require_once 'middleware/auth_middleware.php';
 
+// Proteger todas las rutas: solo usuarios logueados
 requireLogin();
 
-$controller = new ColaboradoresController();
+$controller = new UsuariosController();
 $accion = $_GET['accion'] ?? 'index';
 $id = $_GET['id'] ?? null;
 
@@ -25,7 +26,7 @@ switch ($accion) {
         if ($id) {
             $controller->editar($id);
         } else {
-            header('Location: colaboradores.php');
+            header('Location: usuarios.php');
         }
         break;
 
@@ -33,7 +34,7 @@ switch ($accion) {
         if ($id) {
             $controller->update($id);
         } else {
-            header('Location: colaboradores.php');
+            header('Location: usuarios.php');
         }
         break;
 
@@ -41,7 +42,7 @@ switch ($accion) {
         if ($id) {
             $controller->ver($id);
         } else {
-            header('Location: colaboradores.php');
+            header('Location: usuarios.php');
         }
         break;
 
@@ -49,7 +50,7 @@ switch ($accion) {
         if ($id) {
             $controller->desactivar($id);
         } else {
-            header('Location: colaboradores.php');
+            header('Location: usuarios.php');
         }
         break;
 
@@ -57,7 +58,7 @@ switch ($accion) {
         if ($id) {
             $controller->activar($id);
         } else {
-            header('Location: colaboradores.php');
+            header('Location: usuarios.php');
         }
         break;
 

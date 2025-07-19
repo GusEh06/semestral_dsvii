@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../config/database.php';
 // =====================================================
 // models/Usuario.php - Modelo de Usuario
 // =====================================================
@@ -58,7 +59,7 @@ class Usuario
 
             return $stmt->execute([
                 'username' => $datos['username'],
-                'password_hash' => password_hash($datos['password'], PASSWORD_DEFAULT),
+                'password_hash' => $datos['password_hash'], 
                 'email' => $datos['email'],
                 'rol_id' => $datos['rol_id'],
                 'activo' => $datos['activo'] ?? 1
@@ -146,4 +147,126 @@ class Usuario
 
         return $stmt->fetch() !== false;
     }
+
+    // Obtener todos los usuarios
+    public function obtenerTodos()
+    {
+        try {
+            $sql = "SELECT u.*, r.nombre as rol_nombre
+                    FROM {$this->table} u
+                    JOIN roles r ON u.rol_id = r.id";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute();
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("Error al obtener usuarios: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    // Desactivar usuario
+    public function desactivar($id)
+    {
+        try {
+            $sql = "UPDATE {$this->table} SET activo = 0 WHERE id = :id";
+            $stmt = $this->db->prepare($sql);
+            return $stmt->execute(['id' => $id]);
+        } catch (PDOException $e) {
+            error_log("Error al desactivar usuario: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    // Activar usuario
+    public function activar($id)
+    {
+        try {
+            $sql = "UPDATE {$this->table} SET activo = 1 WHERE id = :id";
+            $stmt = $this->db->prepare($sql);
+            return $stmt->execute(['id' => $id]);
+        } catch (PDOException $e) {
+            error_log("Error al activar usuario: " . $e->getMessage());
+            return false;
+        }
+    }
+
+     // Obtener un usuario por su ID
+    public function obtenerPorId($id)
+    {
+        try {
+            $sql = "SELECT u.*, r.nombre as rol_nombre
+                    FROM {$this->table} u
+                    JOIN roles r ON u.rol_id = r.id
+                    WHERE u.id = :id"; // ✅ Aquí usamos el ID recibido
+
+            $stmt = $this->db->prepare($sql);
+            $stmt->bindParam(':id', $id, PDO::PARAM_INT); // ✅ Forzar como entero
+            $stmt->execute();
+
+            $usuario = $stmt->fetch();
+
+            if (!$usuario) {
+                error_log("No se encontró usuario con ID: $id");
+            }
+
+            return $usuario;
+        } catch (PDOException $e) {
+            error_log("Error al obtener usuario por ID: " . $e->getMessage());
+            return false;
+        }
+    }
+
+
+    public function actualizar($id, $datos)
+    {
+        try {
+            $sql = "UPDATE {$this->table}
+                    SET username = :username,
+                        email = :email,
+                        rol_id = :rol_id,
+                        activo = :activo";
+
+            // Solo actualiza contraseña si viene en datos
+            if (!empty($datos['password_hash'])) {
+                $sql .= ", password_hash = :password_hash";
+            }
+
+            $sql .= " WHERE id = :id";
+
+            $stmt = $this->db->prepare($sql);
+
+            $params = [
+                'username' => $datos['username'],
+                'email' => $datos['email'],
+                'rol_id' => $datos['rol_id'],
+                'activo' => $datos['activo'],
+                'id' => $id
+            ];
+
+            if (!empty($datos['password_hash'])) {
+                $params['password_hash'] = $datos['password_hash'];
+            }
+
+            return $stmt->execute($params);
+        } catch (PDOException $e) {
+            error_log("Error al actualizar usuario: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    // Obtener todos los roles activos para el formulario
+    public function obtenerRoles()
+    {
+        try {
+            $sql = "SELECT id, nombre FROM roles WHERE activo = 1 ORDER BY nombre ASC";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute();
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("Error al obtener roles: " . $e->getMessage());
+            return [];
+        }
+    }
+
+
 }

@@ -1,8 +1,7 @@
 <?php
-
-// =====================================================
-// controllers/ColaboradoresController.php - Controlador
-// =====================================================
+require_once 'models/Colaborador.php';
+require_once 'controllers/AuthController.php';
+require_once 'utils/Sanitizador.php';
 
 class ColaboradoresController
 {
@@ -15,247 +14,212 @@ class ColaboradoresController
         $this->auth = new AuthController();
     }
 
-    // Listar colaboradores
+    private function verificarAcceso()
+    {
+        if (!$this->auth->tienePermiso('colaboradores.acceso')) {
+            http_response_code(403);
+            include 'views/layouts/403.php';
+            exit();
+        }
+    }
+
     public function index()
     {
-        // Verificar permisos
-        if (!$this->auth->tienePermiso('colaboradores.leer')) {
-            http_response_code(403);
-            include 'views/403.php';
-            return;
-        }
-
-        $filtros = $_GET;
-        $pagina = isset($_GET['pagina']) ? (int)$_GET['pagina'] : 1;
-        $porPagina = 20;
-
-        $resultado = $this->colaborador->obtenerLista($filtros, $pagina, $porPagina);
-        $departamentos = $this->colaborador->obtenerDepartamentos();
-
+        $this->verificarAcceso();
+        $colaboradores = $this->colaborador->obtenerTodos();
         include 'views/colaboradores/index.php';
     }
 
-    // Mostrar formulario de creación
     public function crear()
     {
-        if (!$this->auth->tienePermiso('colaboradores.crear')) {
-            http_response_code(403);
-            include 'views/403.php';
-            return;
-        }
-
-        $departamentos = $this->colaborador->obtenerDepartamentos();
+        $this->verificarAcceso();
         include 'views/colaboradores/crear.php';
     }
 
-    // Procesar creación
     public function store()
     {
-        if (!$this->auth->tienePermiso('colaboradores.crear')) {
-            http_response_code(403);
-            return;
-        }
+        $this->verificarAcceso();
 
-        $datos = $_POST;
-        $errores = $this->validarDatos($datos);
+        // Sanitizar datos del colaborador
+        $datos = [
+            'primer_nombre'      => Sanitizador::texto($_POST['primer_nombre']),
+            'segundo_nombre'     => Sanitizador::texto($_POST['segundo_nombre']),
+            'primer_apellido'    => Sanitizador::texto($_POST['primer_apellido']),
+            'segundo_apellido'   => Sanitizador::texto($_POST['segundo_apellido']),
+            'sexo'               => Sanitizador::texto($_POST['sexo']),
+            'cedula'             => Sanitizador::texto($_POST['cedula']),
+            'fecha_nacimiento'   => $_POST['fecha_nacimiento'],
+            'telefono'           => Sanitizador::texto($_POST['telefono']),
+            'celular'            => Sanitizador::texto($_POST['celular']),
+            'direccion'          => Sanitizador::texto($_POST['direccion']),
+            'correo_personal'    => Sanitizador::email($_POST['correo_personal']),
+            'sueldo'             => Sanitizador::flotante($_POST['sueldo']),
+            'departamento_id'    => Sanitizador::entero($_POST['departamento_id']),
+            'fecha_contratacion' => $_POST['fecha_contratacion'],
+            'tipo_empleado'      => Sanitizador::texto($_POST['tipo_empleado']),
+            'ocupacion'          => Sanitizador::texto($_POST['ocupacion']),
+            'empleado_activo'    => 1,
+            'foto_perfil'        => null
+        ];
 
-        if (empty($errores)) {
-            // Manejar upload de foto
-            if (isset($_FILES['foto_perfil']) && $_FILES['foto_perfil']['error'] === UPLOAD_ERR_OK) {
-                $foto = $this->procesarFoto($_FILES['foto_perfil']);
-                if ($foto) {
-                    $datos['foto_perfil'] = $foto;
-                }
-            }
-
-            $id = $this->colaborador->crear($datos);
-
-            if ($id) {
-                $_SESSION['mensaje'] = ['tipo' => 'success', 'texto' => 'Colaborador creado exitosamente'];
-                header('Location: colaboradores.php?ver=' . $id);
-                exit();
-            } else {
-                $errores[] = 'Error al crear el colaborador';
-            }
-        }
-
-        $_SESSION['errores'] = $errores;
-        $_SESSION['datos_anteriores'] = $datos;
-        header('Location: colaboradores.php?accion=crear');
-        exit();
-    }
-
-    // Mostrar detalles del colaborador
-    public function ver($id)
-    {
-        if (!$this->auth->tienePermiso('colaboradores.leer')) {
-            http_response_code(403);
-            include 'views/403.php';
-            return;
-        }
-
-        $colaborador = $this->colaborador->obtenerPorId($id);
-
-        if (!$colaborador) {
-            http_response_code(404);
-            include 'views/404.php';
-            return;
-        }
-
-        $historial = $this->colaborador->obtenerHistorial($id);
-        include 'views/colaboradores/ver.php';
-    }
-
-    // Mostrar formulario de edición
-    public function editar($id)
-    {
-        if (!$this->auth->tienePermiso('colaboradores.actualizar')) {
-            http_response_code(403);
-            include 'views/403.php';
-            return;
-        }
-
-        $colaborador = $this->colaborador->obtenerPorId($id);
-
-        if (!$colaborador) {
-            http_response_code(404);
-            include 'views/404.php';
-            return;
-        }
-
-        $departamentos = $this->colaborador->obtenerDepartamentos();
-        include 'views/colaboradores/editar.php';
-    }
-
-    // Procesar actualización
-    public function actualizar($id)
-    {
-        if (!$this->auth->tienePermiso('colaboradores.actualizar')) {
-            http_response_code(403);
-            return;
-        }
-
-        $datos = $_POST;
-        $errores = $this->validarDatos($datos, $id);
-
-        if (empty($errores)) {
-            // Manejar upload de foto
-            if (isset($_FILES['foto_perfil']) && $_FILES['foto_perfil']['error'] === UPLOAD_ERR_OK) {
-                $foto = $this->procesarFoto($_FILES['foto_perfil']);
-                if ($foto) {
-                    $datos['foto_perfil'] = $foto;
-                }
-            }
-
-            $result = $this->colaborador->actualizar($id, $datos);
-
-            if ($result) {
-                $_SESSION['mensaje'] = ['tipo' => 'success', 'texto' => 'Colaborador actualizado exitosamente'];
-                header('Location: colaboradores.php?ver=' . $id);
-                exit();
-            } else {
-                $errores[] = 'Error al actualizar el colaborador';
+        // 📸 Subir foto de perfil
+        if (isset($_FILES['foto_perfil']) && $_FILES['foto_perfil']['error'] === UPLOAD_ERR_OK) {
+            $foto = $this->subirArchivo($_FILES['foto_perfil'], 'uploads/fotos', ['jpg', 'jpeg', 'png'], 2 * 1024 * 1024);
+            if ($foto) {
+                $datos['foto_perfil'] = $foto;
             }
         }
 
-        $_SESSION['errores'] = $errores;
-        $_SESSION['datos_anteriores'] = $datos;
-        header('Location: colaboradores.php?editar=' . $id);
-        exit();
-    }
+        if ($this->colaborador->crear($datos)) {
+            $colaborador_id = $this->colaborador->getLastInsertId();
 
-    // Desactivar colaborador
-    public function desactivar($id)
-    {
-        if (!$this->auth->tienePermiso('colaboradores.eliminar')) {
-            http_response_code(403);
-            return;
-        }
+            // 📄 Subir historial académico si está activado
+            if (!empty($_POST['tipo_documento']) && !empty($_FILES['archivo_pdf']['name'])) {
+                $this->guardarDocumentoAcademico($colaborador_id);
+            }
 
-        $motivo = $_POST['motivo'] ?? '';
-
-        if ($this->colaborador->desactivar($id, $motivo)) {
-            $_SESSION['mensaje'] = ['tipo' => 'success', 'texto' => 'Colaborador desactivado exitosamente'];
+            $_SESSION['mensaje'] = ['tipo' => 'success', 'texto' => 'Colaborador creado exitosamente'];
         } else {
-            $_SESSION['mensaje'] = ['tipo' => 'error', 'texto' => 'Error al desactivar colaborador'];
+            $_SESSION['mensaje'] = ['tipo' => 'error', 'texto' => 'Error al crear colaborador'];
         }
-
         header('Location: colaboradores.php');
         exit();
     }
 
-    // Validar datos del formulario
-    private function validarDatos($datos, $excluirId = null)
+    public function editar($id)
     {
-        $errores = [];
+        $this->verificarAcceso();
 
-        // Campos requeridos
-        $requeridos = [
-            'primer_nombre',
-            'primer_apellido',
-            'cedula',
-            'sexo',
-            'sueldo',
-            'departamento_id',
-            'fecha_contratacion',
-            'tipo_empleado'
+        $colaborador = $this->colaborador->obtenerPorId($id);
+        $documentos = $this->colaborador->obtenerDocumentos($id);
+        if (!$colaborador) {
+            $_SESSION['mensaje'] = ['tipo' => 'error', 'texto' => 'Colaborador no encontrado'];
+            header('Location: colaboradores.php');
+            exit();
+        }
+
+        include 'views/colaboradores/editar.php';
+    }
+
+    public function update($id)
+    {
+        $this->verificarAcceso();
+
+        // Sanitizar datos del colaborador
+        $datos = [
+            'primer_nombre'      => Sanitizador::texto($_POST['primer_nombre']),
+            'segundo_nombre'     => Sanitizador::texto($_POST['segundo_nombre']),
+            'primer_apellido'    => Sanitizador::texto($_POST['primer_apellido']),
+            'segundo_apellido'   => Sanitizador::texto($_POST['segundo_apellido']),
+            'sexo'               => Sanitizador::texto($_POST['sexo']),
+            'cedula'             => Sanitizador::texto($_POST['cedula']),
+            'fecha_nacimiento'   => $_POST['fecha_nacimiento'],
+            'telefono'           => Sanitizador::texto($_POST['telefono']),
+            'celular'            => Sanitizador::texto($_POST['celular']),
+            'direccion'          => Sanitizador::texto($_POST['direccion']),
+            'correo_personal'    => Sanitizador::email($_POST['correo_personal']),
+            'sueldo'             => Sanitizador::flotante($_POST['sueldo']),
+            'departamento_id'    => Sanitizador::entero($_POST['departamento_id']),
+            'fecha_contratacion' => $_POST['fecha_contratacion'],
+            'tipo_empleado'      => Sanitizador::texto($_POST['tipo_empleado']),
+            'ocupacion'          => Sanitizador::texto($_POST['ocupacion']),
         ];
 
-        foreach ($requeridos as $campo) {
-            if (empty($datos[$campo])) {
-                $errores[] = "El campo " . ucfirst(str_replace('_', ' ', $campo)) . " es requerido";
+        // 📸 Subir nueva foto de perfil
+        if (isset($_FILES['foto_perfil']) && $_FILES['foto_perfil']['error'] === UPLOAD_ERR_OK) {
+            $foto = $this->subirArchivo($_FILES['foto_perfil'], 'uploads/fotos', ['jpg', 'jpeg', 'png'], 2 * 1024 * 1024);
+            if ($foto) {
+                $datos['foto_perfil'] = $foto;
             }
         }
 
-        // Validar cédula única
-        if (!empty($datos['cedula']) && $this->colaborador->existeCedula($datos['cedula'], $excluirId)) {
-            $errores[] = "La cédula ya está registrada";
-        }
+        if ($this->colaborador->actualizar($id, $datos)) {
+            // 📄 Subir nuevo historial académico si está activado
+            if (!empty($_POST['tipo_documento']) && !empty($_FILES['archivo_pdf']['name'])) {
+                $this->guardarDocumentoAcademico($id);
+            }
 
-        // Validar email
-        if (!empty($datos['correo_personal']) && !filter_var($datos['correo_personal'], FILTER_VALIDATE_EMAIL)) {
-            $errores[] = "El formato del correo electrónico no es válido";
+            $_SESSION['mensaje'] = ['tipo' => 'success', 'texto' => 'Colaborador actualizado correctamente'];
+        } else {
+            $_SESSION['mensaje'] = ['tipo' => 'error', 'texto' => 'Error al actualizar colaborador'];
         }
-
-        // Validar sueldo
-        if (!empty($datos['sueldo']) && (!is_numeric($datos['sueldo']) || $datos['sueldo'] <= 0)) {
-            $errores[] = "El sueldo debe ser un número positivo";
-        }
-
-        return $errores;
+        header('Location: colaboradores.php');
+        exit();
     }
 
-    // Procesar upload de foto
-    private function procesarFoto($archivo)
+    private function guardarDocumentoAcademico($colaborador_id)
     {
-        $extensionesPermitidas = ['jpg', 'jpeg', 'png', 'gif'];
-        $tamanoMaximo = 2 * 1024 * 1024; // 2MB
-
-        $nombre = $archivo['name'];
-        $tamaño = $archivo['size'];
-        $tmp = $archivo['tmp_name'];
-        $extension = strtolower(pathinfo($nombre, PATHINFO_EXTENSION));
-
-        if (!in_array($extension, $extensionesPermitidas)) {
-            return false;
+        $pdf = $this->subirArchivo($_FILES['archivo_pdf'], 'uploads/pdf', ['pdf'], 5 * 1024 * 1024);
+        if ($pdf) {
+            $doc = [
+                'colaborador_id'   => $colaborador_id,
+                'tipo_documento'   => Sanitizador::texto($_POST['tipo_documento']),
+                'nombre_documento' => Sanitizador::texto($_POST['nombre_documento']),
+                'institucion'      => Sanitizador::texto($_POST['institucion']),
+                'fecha_emision'    => $_POST['fecha_emision'],
+                'archivo_pdf'      => $pdf,
+                'verificado'       => 0,
+                'observaciones'    => null
+            ];
+            $this->colaborador->guardarDocumento($doc);
         }
+    }
 
-        if ($tamaño > $tamanoMaximo) {
-            return false;
+    private function subirArchivo($file, $ruta, $extensionesPermitidas, $maxSize)
+    {
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, $extensionesPermitidas)) return false;
+        if ($file['size'] > $maxSize) return false;
+
+        $nuevoNombre = uniqid() . '.' . $ext;
+        $destino = $ruta . '/' . $nuevoNombre;
+
+        if (!is_dir($ruta)) mkdir($ruta, 0777, true);
+
+        if (move_uploaded_file($file['tmp_name'], $destino)) {
+            return $destino;
         }
-
-        $nombreUnico = uniqid() . '_' . time() . '.' . $extension;
-        $rutaDestino = 'uploads/fotos/' . $nombreUnico;
-
-        // Crear directorio si no existe
-        if (!is_dir('uploads/fotos/')) {
-            mkdir('uploads/fotos/', 0777, true);
-        }
-
-        if (move_uploaded_file($tmp, $rutaDestino)) {
-            return $nombreUnico;
-        }
-
         return false;
+    }
+
+    public function ver($id)
+    {
+        $this->verificarAcceso();
+
+        $colaborador = $this->colaborador->obtenerPorId($id);
+        $documentos = $this->colaborador->obtenerDocumentos($id);
+        if (!$colaborador) {
+            $_SESSION['mensaje'] = ['tipo' => 'error', 'texto' => 'Colaborador no encontrado'];
+            header('Location: colaboradores.php');
+            exit();
+        }
+
+        include 'views/colaboradores/ver.php';
+    }
+
+    public function desactivar($id)
+    {
+        $this->verificarAcceso();
+
+        if ($this->colaborador->desactivar($id)) {
+            $_SESSION['mensaje'] = ['tipo' => 'success', 'texto' => 'Colaborador desactivado'];
+        } else {
+            $_SESSION['mensaje'] = ['tipo' => 'error', 'texto' => 'Error al desactivar colaborador'];
+        }
+        header('Location: colaboradores.php');
+        exit();
+    }
+
+    public function activar($id)
+    {
+        $this->verificarAcceso();
+
+        if ($this->colaborador->activar($id)) {
+            $_SESSION['mensaje'] = ['tipo' => 'success', 'texto' => 'Colaborador activado'];
+        } else {
+            $_SESSION['mensaje'] = ['tipo' => 'error', 'texto' => 'Error al activar colaborador'];
+        }
+        header('Location: colaboradores.php');
+        exit();
     }
 }
