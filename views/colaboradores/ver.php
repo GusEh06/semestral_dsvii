@@ -14,47 +14,43 @@
                 <?php else: ?>
                     <img src="assets/img/default-avatar.png" class="img-thumbnail mb-3" style="width: 150px; height: 150px;">
                 <?php endif; ?>
+                <div class="mt-2">
+                    <span class="badge <?= $colaborador['empleado_activo'] ? 'bg-success' : 'bg-secondary'; ?>">
+                        <?= $colaborador['empleado_activo'] ? 'Activo' : 'Inactivo'; ?>
+                    </span>
+                    <span class="badge bg-info text-dark">
+                        <?= htmlspecialchars($colaborador['tipo_empleado']); ?>
+                    </span>
+                </div>
             </div>
             <div class="col-md-9">
-                <p><strong>Nombre:</strong> <?= htmlspecialchars($colaborador['primer_nombre'] . ' ' . $colaborador['primer_apellido']); ?></p>
+                <!-- Datos Personales -->
+                <h5><i class="fas fa-id-card me-2"></i>Datos Personales</h5>
+                <p><strong>Nombre Completo:</strong> <?= htmlspecialchars($colaborador['primer_nombre'] . ' ' . $colaborador['segundo_nombre'] . ' ' . $colaborador['primer_apellido'] . ' ' . $colaborador['segundo_apellido']); ?></p>
                 <p><strong>Cédula:</strong> <?= htmlspecialchars($colaborador['cedula']); ?></p>
-                <p><strong>Correo:</strong> <?= htmlspecialchars($colaborador['correo_personal']); ?></p>
-                <p><strong>Estado:</strong> <?= $colaborador['empleado_activo'] ? '<span class="badge bg-success">Activo</span>' : '<span class="badge bg-secondary">Inactivo</span>'; ?></p>
+                <p><strong>Sexo:</strong> <?= $colaborador['sexo'] === 'M' ? 'Masculino' : 'Femenino'; ?></p>
+                <p><strong>Fecha de Nacimiento:</strong> <?= htmlspecialchars($colaborador['fecha_nacimiento']); ?></p>
+                <p><strong>Dirección:</strong> <?= htmlspecialchars($colaborador['direccion']); ?></p>
+                <hr>
+
+                <!-- Información de Contacto -->
+                <h5><i class="fas fa-phone-alt me-2"></i>Información de Contacto</h5>
+                <p><strong>Correo Personal:</strong> <?= htmlspecialchars($colaborador['correo_personal']); ?></p>
+                <p><strong>Teléfono:</strong> <?= htmlspecialchars($colaborador['telefono']); ?></p>
+                <p><strong>Celular:</strong> <?= htmlspecialchars($colaborador['celular']); ?></p>
+                <hr>
+
+                <!-- Datos Laborales -->
+                <h5><i class="fas fa-briefcase me-2"></i>Datos Laborales</h5>
+                <p><strong>Departamento:</strong> <?= htmlspecialchars($colaborador['departamento_nombre'] ?? 'Sin asignar'); ?></p>
+                <p><strong>Cargo Actual:</strong> <?= htmlspecialchars($colaborador['cargo_nombre'] ?? 'Sin asignar'); ?></p>
+                <p><strong>Ocupación:</strong> <?= htmlspecialchars($colaborador['ocupacion']); ?></p>
+                <p><strong>Sueldo:</strong> <span class="badge bg-primary">$<?= htmlspecialchars(number_format($colaborador['sueldo'], 2)); ?></span></p>
+                <p><strong>Fecha de Contratación:</strong> <?= htmlspecialchars($colaborador['fecha_contratacion']); ?></p>
+                <p><strong>Días Vacaciones Acumulados:</strong> <?= htmlspecialchars($colaborador['dias_vacaciones_acumulados']); ?> días</p>
+                <p><strong>Última Actualización Vacaciones:</strong> <?= htmlspecialchars($colaborador['ultima_actualizacion_vacaciones'] ?? 'Sin registro'); ?></p>
             </div>
         </div>
-    </div>
-</div>
-
-<div class="card">
-    <div class="card-header">
-        <i class="fas fa-file-pdf"></i> Historial Académico
-    </div>
-    <div class="card-body">
-        <?php if (!empty($documentos)): ?>
-            <ul class="list-group">
-                <?php foreach ($documentos as $doc): ?>
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <div>
-                            <strong><?= htmlspecialchars($doc['nombre_documento']); ?></strong><br>
-                            <small><?= htmlspecialchars($doc['tipo_documento']); ?> - <?= htmlspecialchars($doc['institucion']); ?></small>
-                        </div>
-                        <div>
-                            <a href="<?= htmlspecialchars($doc['archivo_pdf']); ?>" target="_blank" class="btn btn-sm btn-info">
-                                <i class="fas fa-eye"></i> Ver
-                            </a>
-                            <a href="<?= htmlspecialchars($doc['archivo_pdf']); ?>" download class="btn btn-sm btn-secondary">
-                                <i class="fas fa-download"></i> Descargar
-                            </a>
-                            <button onclick="confirmarEliminarDoc(<?= $doc['id']; ?>)" class="btn btn-sm btn-danger">
-                                <i class="fas fa-trash-alt"></i> Eliminar
-                            </button>
-                        </div>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
-        <?php else: ?>
-            <p class="text-muted">No hay documentos académicos registrados.</p>
-        <?php endif; ?>
     </div>
 </div>
 
@@ -63,34 +59,5 @@
         <i class="fas fa-arrow-left"></i> Volver
     </a>
 </div>
-
-<script>
-function confirmarEliminarDoc(docId) {
-    Swal.fire({
-        title: '¿Eliminar documento?',
-        text: "Esta acción eliminará permanentemente el PDF.",
-        icon: 'error',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, eliminar',
-        cancelButtonText: 'Cancelar'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            window.location.href = 'documentos.php?accion=eliminar&id=' + docId;
-        }
-    });
-}
-
-// Mensajes flash SweetAlert2
-<?php if (!empty($_SESSION['mensaje'])): ?>
-Swal.fire({
-    icon: '<?= $_SESSION['mensaje']['tipo']; ?>',
-    title: '<?= $_SESSION['mensaje']['tipo'] === 'success' ? 'Éxito' : 'Error'; ?>',
-    text: '<?= $_SESSION['mensaje']['texto']; ?>',
-    timer: 2000,
-    showConfirmButton: false
-});
-<?php unset($_SESSION['mensaje']); ?>
-<?php endif; ?>
-</script>
 
 <?php include 'views/layouts/footer.php'; ?>

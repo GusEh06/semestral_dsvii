@@ -6,14 +6,18 @@
     <i class="fas fa-user-plus"></i> Nuevo Colaborador
 </a>
 
-<table class="table table-bordered">
+<div class="mb-3">
+    <input type="text" id="filtroDireccion" class="form-control" placeholder="Buscar por dirección...">
+</div>
+
+<table class="table table-bordered" id="tablaColaboradores">
     <thead class="table-dark">
         <tr>
             <th>ID</th>
             <th>Nombre</th>
             <th>Cédula</th>
+            <th>Dirección</th>
             <th>Correo</th>
-            <th>Departamento</th>
             <th>Estado</th>
             <th>Acciones</th>
         </tr>
@@ -24,8 +28,8 @@
             <td><?= htmlspecialchars($col['id']); ?></td>
             <td><?= htmlspecialchars($col['primer_nombre'] . ' ' . $col['primer_apellido']); ?></td>
             <td><?= htmlspecialchars($col['cedula']); ?></td>
+            <td><?= htmlspecialchars($col['direccion']); ?></td>
             <td><?= htmlspecialchars($col['correo_personal']); ?></td>
-            <td><?= htmlspecialchars($col['departamento_id']); ?></td>
             <td><?= $col['empleado_activo'] ? '<span class="badge bg-success">Activo</span>' : '<span class="badge bg-secondary">Inactivo</span>'; ?></td>
             <td>
                 <?php if ($col['empleado_activo']): ?>
@@ -79,6 +83,16 @@ function confirmarActivar(id) {
         }
     });
 }
+
+// Filtro por dirección
+document.getElementById('filtroDireccion').addEventListener('keyup', function() {
+    const filter = this.value.toLowerCase();
+    const rows = document.querySelectorAll('#tablaColaboradores tbody tr');
+    rows.forEach(row => {
+        const direccion = row.cells[3].textContent.toLowerCase(); 
+        row.style.display = direccion.includes(filter) ? '' : 'none';
+    });
+});
 
 // Mensajes flash SweetAlert2
 <?php if (!empty($_SESSION['mensaje'])): ?>
