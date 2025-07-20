@@ -33,58 +33,84 @@ class ColaboradoresController
     public function crear()
     {
         $this->verificarAcceso();
+        $cargos = $this->colaborador->obtenerCargos(); // 👈 Dropdown de cargos
         include 'views/colaboradores/crear.php';
     }
 
     public function store()
-    {
-        $this->verificarAcceso();
+{
+    $this->verificarAcceso();
 
-        // Sanitizar datos del colaborador
-        $datos = [
-            'primer_nombre'      => Sanitizador::texto($_POST['primer_nombre']),
-            'segundo_nombre'     => Sanitizador::texto($_POST['segundo_nombre']),
-            'primer_apellido'    => Sanitizador::texto($_POST['primer_apellido']),
-            'segundo_apellido'   => Sanitizador::texto($_POST['segundo_apellido']),
-            'sexo'               => Sanitizador::texto($_POST['sexo']),
-            'cedula'             => Sanitizador::texto($_POST['cedula']),
-            'fecha_nacimiento'   => $_POST['fecha_nacimiento'],
-            'telefono'           => Sanitizador::texto($_POST['telefono']),
-            'celular'            => Sanitizador::texto($_POST['celular']),
-            'direccion'          => Sanitizador::texto($_POST['direccion']),
-            'correo_personal'    => Sanitizador::email($_POST['correo_personal']),
-            'sueldo'             => Sanitizador::flotante($_POST['sueldo']),
-            'departamento_id'    => Sanitizador::entero($_POST['departamento_id']),
-            'fecha_contratacion' => $_POST['fecha_contratacion'],
-            'tipo_empleado'      => Sanitizador::texto($_POST['tipo_empleado']),
-            'ocupacion'          => Sanitizador::texto($_POST['ocupacion']),
-            'empleado_activo'    => 1,
-            'foto_perfil'        => null
+    // Validar si ya existe un colaborador con la misma cédula
+    $existe = $this->colaborador->obtenerPorCedula($_POST['cedula']);
+    if ($existe) {
+        $_SESSION['mensaje'] = [
+            'tipo' => 'error',
+            'texto' => 'Ya existe un colaborador registrado con esta cédula.'
         ];
-
-        // 📸 Subir foto de perfil
-        if (isset($_FILES['foto_perfil']) && $_FILES['foto_perfil']['error'] === UPLOAD_ERR_OK) {
-            $foto = $this->subirArchivo($_FILES['foto_perfil'], 'uploads/fotos', ['jpg', 'jpeg', 'png'], 2 * 1024 * 1024);
-            if ($foto) {
-                $datos['foto_perfil'] = $foto;
-            }
-        }
-
-        if ($this->colaborador->crear($datos)) {
-            $colaborador_id = $this->colaborador->getLastInsertId();
-
-            // 📄 Subir historial académico si está activado
-            if (!empty($_POST['tipo_documento']) && !empty($_FILES['archivo_pdf']['name'])) {
-                $this->guardarDocumentoAcademico($colaborador_id);
-            }
-
-            $_SESSION['mensaje'] = ['tipo' => 'success', 'texto' => 'Colaborador creado exitosamente'];
-        } else {
-            $_SESSION['mensaje'] = ['tipo' => 'error', 'texto' => 'Error al crear colaborador'];
-        }
-        header('Location: colaboradores.php');
+        $_SESSION['old'] = $_POST; // 🔥 Guarda todos los datos del formulario
+        header('Location: colaboradores.php?accion=crear');
         exit();
     }
+
+    $datos = [
+        'primer_nombre'      => Sanitizador::texto($_POST['primer_nombre']),
+        'segundo_nombre'     => Sanitizador::texto($_POST['segundo_nombre']),
+        'primer_apellido'    => Sanitizador::texto($_POST['primer_apellido']),
+        'segundo_apellido'   => Sanitizador::texto($_POST['segundo_apellido']),
+        'sexo'               => Sanitizador::texto($_POST['sexo']),
+        'cedula'             => Sanitizador::texto($_POST['cedula']),
+        'fecha_nacimiento'   => $_POST['fecha_nacimiento'],
+        'telefono'           => Sanitizador::texto($_POST['telefono']),
+        'celular'            => Sanitizador::texto($_POST['celular']),
+        'direccion'          => Sanitizador::texto($_POST['direccion']),
+        'correo_personal'    => Sanitizador::email($_POST['correo_personal']),
+        'sueldo'             => Sanitizador::flotante($_POST['sueldo']),
+        'departamento_id'    => Sanitizador::entero($_POST['departamento_id']),
+        'fecha_contratacion' => $_POST['fecha_contratacion'],
+        'tipo_empleado'      => Sanitizador::texto($_POST['tipo_empleado']),
+        'ocupacion'          => Sanitizador::texto($_POST['ocupacion']),
+        'cargo_actual_id'    => Sanitizador::entero($_POST['cargo_actual_id']),
+        'empleado_activo'    => 1,
+        'foto_perfil'        => null
+    ];
+
+    // Subir foto si existe
+    if (isset($_FILES['foto_perfil']) && $_FILES['foto_perfil']['error'] === UPLOAD_ERR_OK) {
+        $foto = $this->subirArchivo($_FILES['foto_perfil'], 'uploads/fotos', ['jpg', 'jpeg', 'png'], 2 * 1024 * 1024);
+        if ($foto) {
+            $datos['foto_perfil'] = $foto;
+        }
+    }
+
+    if ($this->colaborador->crear($datos)) {
+        $colaborador_id = $this->colaborador->getLastInsertId();
+
+        // Registrar primer movimiento
+        $this->colaborador->registrarPrimerMovimiento(
+            $colaborador_id,
+            $datos['cargo_actual_id'],
+            $datos['sueldo'],
+            $datos['departamento_id'],
+            $datos['fecha_contratacion'],
+            $_SESSION['user_id'] // 👈 Aquí el usuario que está logueado
+        );
+
+        // Subir historial académico si aplica
+        if (!empty($_POST['tipo_documento']) && !empty($_FILES['archivo_pdf']['name'])) {
+            $this->guardarDocumentoAcademico($colaborador_id);
+        }
+
+        $_SESSION['mensaje'] = ['tipo' => 'success', 'texto' => 'Colaborador creado exitosamente'];
+    } else {
+        $_SESSION['mensaje'] = ['tipo' => 'error', 'texto' => 'Error al crear colaborador'];
+    }
+
+    header('Location: colaboradores.php');
+    exit();
+}
+
+    
 
     public function editar($id)
     {
@@ -92,6 +118,8 @@ class ColaboradoresController
 
         $colaborador = $this->colaborador->obtenerPorId($id);
         $documentos = $this->colaborador->obtenerDocumentos($id);
+        $cargos = $this->colaborador->obtenerCargos();
+
         if (!$colaborador) {
             $_SESSION['mensaje'] = ['tipo' => 'error', 'texto' => 'Colaborador no encontrado'];
             header('Location: colaboradores.php');
@@ -105,7 +133,6 @@ class ColaboradoresController
     {
         $this->verificarAcceso();
 
-        // Sanitizar datos del colaborador
         $datos = [
             'primer_nombre'      => Sanitizador::texto($_POST['primer_nombre']),
             'segundo_nombre'     => Sanitizador::texto($_POST['segundo_nombre']),
@@ -123,9 +150,9 @@ class ColaboradoresController
             'fecha_contratacion' => $_POST['fecha_contratacion'],
             'tipo_empleado'      => Sanitizador::texto($_POST['tipo_empleado']),
             'ocupacion'          => Sanitizador::texto($_POST['ocupacion']),
+            'cargo_actual_id'    => Sanitizador::entero($_POST['cargo_actual_id'])
         ];
 
-        // 📸 Subir nueva foto de perfil
         if (isset($_FILES['foto_perfil']) && $_FILES['foto_perfil']['error'] === UPLOAD_ERR_OK) {
             $foto = $this->subirArchivo($_FILES['foto_perfil'], 'uploads/fotos', ['jpg', 'jpeg', 'png'], 2 * 1024 * 1024);
             if ($foto) {
@@ -134,7 +161,6 @@ class ColaboradoresController
         }
 
         if ($this->colaborador->actualizar($id, $datos)) {
-            // 📄 Subir nuevo historial académico si está activado
             if (!empty($_POST['tipo_documento']) && !empty($_FILES['archivo_pdf']['name'])) {
                 $this->guardarDocumentoAcademico($id);
             }
@@ -188,11 +214,20 @@ class ColaboradoresController
 
         $colaborador = $this->colaborador->obtenerPorId($id);
         $documentos = $this->colaborador->obtenerDocumentos($id);
+
         if (!$colaborador) {
             $_SESSION['mensaje'] = ['tipo' => 'error', 'texto' => 'Colaborador no encontrado'];
             header('Location: colaboradores.php');
             exit();
         }
+
+        $cargos = $this->colaborador->obtenerCargo($id);
+        $estatus = $this->colaborador->obtenerEstatus($id);
+
+        $historial = array_merge($cargos, $estatus);
+        usort($historial, function ($a, $b) {
+            return strtotime($b['fecha']) - strtotime($a['fecha']);
+        });
 
         include 'views/colaboradores/ver.php';
     }
