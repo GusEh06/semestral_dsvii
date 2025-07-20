@@ -61,7 +61,6 @@ class Cargo
 
         $stringFirma = $this->generarStringFirma($datos);
 
-        file_put_contents('string_firma.txt', $stringFirma);
 
         // Cargar clave privada
         $privateKeyPath = __DIR__ . '/../keys/private.pem';
