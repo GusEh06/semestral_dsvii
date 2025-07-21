@@ -109,7 +109,7 @@ $usuario = $auth->obtenerUsuarioActual();
                             <div class="card-body text-center">
                                 <i class="fas fa-chart-pie fa-3x text-dark mb-3"></i>
                                 <h5>Estadísticas</h5>
-                                <a href="estadisticas.php" class="btn btn-dark">Ver Estadísticas</a>
+                                <a href="estadistica.php" class="btn btn-dark">Ver Estadísticas</a>
                             </div>
                         </div>
                     </div>

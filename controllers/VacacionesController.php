@@ -2,6 +2,13 @@
 // =====================================================
 // controllers/VacacionesController.php - Controlador de Vacaciones
 // =====================================================
+require_once 'models/Vacacion.php';
+require_once 'controllers/AuthController.php';
+require_once 'utils/Sanitizador.php';
+require_once 'vendor/autoload.php';
+use Dompdf\Dompdf;
+use Dompdf\Options;
+
 
 class VacacionesController
 {
@@ -28,13 +35,22 @@ class VacacionesController
         $porPagina = 20;
 
         $resultado = $this->vacacion->obtenerSolicitudes($filtros, $pagina, $porPagina);
+
+        // ✅ Aquí se asigna la variable que necesita la vista
+        $vacaciones = $resultado['datos'];
+
+        // También puedes pasar info de paginación si la usas
+        $totalPaginas = $resultado['total_paginas'] ?? 1;
+        $paginaActual = $pagina;
+
+        
         $departamentos = $this->vacacion->obtenerDepartamentos();
 
         include 'views/vacaciones/index.php';
     }
 
     // Mostrar formulario de solicitud
-    public function crear()
+    public function crear() 
     {
         if (!$this->auth->tienePermiso('vacaciones.crear')) {
             http_response_code(403);
@@ -44,6 +60,13 @@ class VacacionesController
 
         $departamentos = $this->vacacion->obtenerDepartamentos();
         $colaboradores = $this->vacacion->obtenerColaboradores();
+
+           
+        // Cargar días ganados para cada colaborador sin referencia
+        foreach ($colaboradores as $key => $colaborador) {
+            $colaboradores[$key]['dias_disponibles'] = $this->vacacion->calcularDiasDisponibles($colaborador['id']);
+        }
+
 
         include 'views/vacaciones/crear.php';
     }
@@ -117,6 +140,36 @@ class VacacionesController
             if ($result) {
                 $mensaje = $accion === 'aprobar' ? 'Solicitud aprobada exitosamente' : 'Solicitud rechazada';
                 $_SESSION['mensaje'] = ['tipo' => 'success', 'texto' => $mensaje];
+
+                if ($accion === 'aprobar') {
+                    $solicitud = $this->vacacion->obtenerPorId($id);
+                    $colaborador = $solicitud['colaborador_nombre'] ?? 'Desconocido';
+                    $fecha_inicio = $solicitud['fecha_inicio'];
+                    $fecha_fin = $solicitud['fecha_fin'];
+                    $dias_solicitados = $solicitud['dias_solicitados'];
+
+                    $options = new Options();
+                    $options->set('defaultFont', 'Arial');
+                    $dompdf = new Dompdf($options);
+
+                    $html = "
+                        <h1>Resolución de Vacaciones</h1>
+                        <p><strong>Colaborador:</strong> $colaborador</p>
+                        <p><strong>Desde:</strong> $fecha_inicio</p>
+                        <p><strong>Hasta:</strong> $fecha_fin</p>
+                        <p><strong>Días solicitados:</strong> $dias_solicitados</p>
+                        <p><strong>Estado:</strong> Aprobado</p>
+                        <p><strong>Generado por:</strong> Admin del sistema</p>
+                    ";
+
+                    $dompdf->loadHtml($html);
+                    $dompdf->setPaper('A4', 'portrait');
+                    $dompdf->render();
+
+                    $nombreArchivo = "resolucion_vacaciones_" . preg_replace('/[^A-Za-z0-9]/', '_', $colaborador) . ".pdf";
+                    $dompdf->stream($nombreArchivo, ['Attachment' => false]);
+                    exit;
+                }
             } else {
                 $_SESSION['mensaje'] = ['tipo' => 'error', 'texto' => 'Error al procesar la solicitud'];
             }
@@ -125,6 +178,7 @@ class VacacionesController
         header('Location: vacaciones.php?ver=' . $id);
         exit();
     }
+
 
     // Calendario de vacaciones
     public function calendario()
@@ -165,7 +219,7 @@ class VacacionesController
 
         $departamento_id = $_GET['departamento_id'] ?? null;
         $colaboradores = $this->vacacion->obtenerColaboradores($departamento_id);
-
+        
         echo json_encode($colaboradores);
     }
 
@@ -187,6 +241,59 @@ class VacacionesController
             'colaborador_id' => $colaborador_id
         ]);
     }
+
+
+
+    public function verPDF($id)
+    {
+        if (!$this->auth->tienePermiso('vacaciones.crear')) {
+            http_response_code(403);
+            include 'views/403.php';
+            return;
+        }
+
+        $solicitud = $this->vacacion->obtenerPorId($id);
+
+        if (!$solicitud) {
+            http_response_code(404);
+            include 'views/404.php';
+            return;
+        }
+
+        $colaborador = $solicitud['colaborador_nombre'];
+        $fecha_inicio = $solicitud['fecha_inicio'];
+        $fecha_fin = $solicitud['fecha_fin'];
+        $dias_solicitados = $solicitud['dias_solicitados'];
+        $estado = $solicitud['estado'];
+        $aprobador = $solicitud['aprobado_por'] ?? 'No aprobado aún';
+
+
+        $options = new Options();
+        $options->set('defaultFont', 'Arial');
+        $dompdf = new Dompdf($options);
+
+        $aprobadorSeguro = htmlspecialchars($aprobador);
+
+        $html = "
+            <h1>Resolución de Vacaciones</h1>
+            <p><strong>Colaborador:</strong> $colaborador</p>
+            <p><strong>Desde:</strong> $fecha_inicio</p>
+            <p><strong>Hasta:</strong> $fecha_fin</p>
+            <p><strong>Días solicitados:</strong> $dias_solicitados</p>
+            <p><strong>Estado:</strong> $estado</p>
+            <p><strong>Aprobado por:</strong> $aprobadorSeguro</p>
+        ";
+
+
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        // Mostrar en navegador (inline)
+        $dompdf->stream("resolucion_vacaciones_{$id}.pdf", ['Attachment' => false]);
+        exit;
+    }
+
 
     // Validar datos del formulario
     private function validarDatos($datos)
@@ -228,6 +335,12 @@ class VacacionesController
         if (!empty($datos['dias_solicitados']) && (!is_numeric($datos['dias_solicitados']) || $datos['dias_solicitados'] <= 0)) {
             $errores[] = "Los días solicitados debe ser un número positivo";
         }
+
+        // Validar mínimo de días
+        if (!empty($datos['dias_solicitados']) && $datos['dias_solicitados'] < 7) {
+            $errores[] = "No se pueden solicitar menos de 7 días de vacaciones";
+        }
+
 
         return $errores;
     }

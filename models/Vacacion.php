@@ -71,6 +71,8 @@ class Vacacion
         }
     }
 
+
+
     // Aprobar o rechazar solicitud
     public function procesarSolicitud($id, $accion, $motivo_rechazo = '', $usuario_id = null)
     {
@@ -258,7 +260,7 @@ class Vacacion
     }
 
     // Calcular días ganados según fecha de contratación (1 día por cada 11 trabajados)
-    private function calcularDiasGanados($fecha_contratacion)
+    public function calcularDiasGanados($fecha_contratacion)
     {
         $contratacion = new DateTime($fecha_contratacion);
         $hoy = new DateTime();
@@ -286,22 +288,26 @@ class Vacacion
                     WHERE colaborador_id = :colaborador_id 
                     AND estado IN ('Pendiente', 'Aprobada')
                     AND (
-                        (fecha_inicio <= :fecha_inicio AND fecha_fin >= :fecha_inicio) OR
-                        (fecha_inicio <= :fecha_fin AND fecha_fin >= :fecha_fin) OR
-                        (fecha_inicio >= :fecha_inicio AND fecha_fin <= :fecha_fin)
+                        (fecha_inicio <= :inicio1 AND fecha_fin >= :inicio1) OR
+                        (fecha_inicio <= :fin1 AND fecha_fin >= :fin1) OR
+                        (fecha_inicio >= :inicio2 AND fecha_fin <= :fin2)
                     )";
 
             $stmt = $this->db->prepare($sql);
             $stmt->execute([
                 'colaborador_id' => $colaborador_id,
-                'fecha_inicio' => $fecha_inicio,
-                'fecha_fin' => $fecha_fin
+                'inicio1' => $fecha_inicio,
+                'fin1' => $fecha_fin,
+                'inicio2' => $fecha_inicio,
+                'fin2' => $fecha_fin
             ]);
 
-            return $stmt->fetch()['conflictos'] > 0;
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            return $result['conflictos'] > 0;
+
         } catch (PDOException $e) {
             error_log("Error al verificar conflicto de fechas: " . $e->getMessage());
-            return true; // Por seguridad, asumir que hay conflicto
+            return false;
         }
     }
 
@@ -334,6 +340,8 @@ class Vacacion
                 'id' => $colaborador_id,
                 'dias' => $dias_disponibles
             ]);
+            
+             error_log("Días acumulados actualizados para colaborador $colaborador_id: $dias_disponibles");
         } catch (PDOException $e) {
             error_log("Error al actualizar días acumulados: " . $e->getMessage());
         }
